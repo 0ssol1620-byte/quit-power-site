@@ -5,6 +5,7 @@ export type SceneFace = 'focused' | 'smile' | 'panic' | 'x-eyes' | 'star'
 export type BossMood = 'idle' | 'watch' | 'shout' | 'stunned'
 export type DeskTheme = 'normal' | 'rush' | 'alarm' | 'confetti'
 export type SceneAura = 'soft' | 'spark' | 'explosion' | 'glow'
+export type EventKind = 'team-call' | 'lunch' | 'payday' | 'overtime' | 'freedom'
 
 export type RivalEntry = {
   rank: number
@@ -28,7 +29,41 @@ export type SceneState = {
   aura: SceneAura
 }
 
+export type GameEvent = {
+  id: string
+  kind: EventKind
+  label: string
+  copy: string
+  boost: number
+  bonus?: number
+  at: number
+}
+
+export const ROUND_MS = 10_000
+export const FEVER_MS = 2_400
+export const FEVER_NEED = 100
+export const COMBO_WINDOW = 220
+export const STORAGE_KEY = 'quit-power-site-v4'
+
 const RIVALS = ['칼퇴요정', '월급헌터', '퇴근직진', '회의실탈출러', '점심스프린터']
+const EVENT_POOL: Omit<GameEvent, 'id' | 'at'>[] = [
+  { kind: 'team-call', label: '팀장 호출', copy: '등 뒤에서 발소리 들린다', boost: 14 },
+  { kind: 'lunch', label: '점심시간', copy: '손이 빨라지는 버프', boost: 22, bonus: 40 },
+  { kind: 'payday', label: '월급날', copy: '현타가 점수로 바뀐다', boost: 16, bonus: 90 },
+  { kind: 'overtime', label: '야근 지옥', copy: '오늘은 진짜 탈출한다', boost: 18 },
+  { kind: 'freedom', label: '칼퇴 찬스', copy: '지금이 버튼 누를 황금 타이밍', boost: 26, bonus: 60 },
+]
+
+export function createEventSequence() {
+  return [...EVENT_POOL]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3)
+    .map((event, index) => ({
+      ...event,
+      id: `${event.kind}-${index}`,
+      at: [1600, 4200, 7600][index],
+    }))
+}
 
 export function getTapOutcome({
   combo,
@@ -144,7 +179,7 @@ export function buildSceneState({
     return {
       mood: 'rage',
       face: tapActive ? 'x-eyes' : 'panic',
-      bubble: latestEventLabel ? `${latestEventLabel} 왔다. 지금 눌러서 탈출!` : '지금이야! 버튼만 믿고 탈출!',
+      bubble: latestEventLabel ? `${latestEventLabel} 왔다. 지금 눌러서 탈출!` : '지금이야! 퇴사 도장 박아!',
       bossMood: 'shout',
       deskTheme: 'alarm',
       stampText: '퇴사각 MAX',
@@ -156,7 +191,7 @@ export function buildSceneState({
     return {
       mood: 'rush',
       face: 'smile',
-      bubble: latestEventLabel ? `${latestEventLabel} 버프 왔다. 더 빨리 눌러!` : '좋아, 리듬 탔다! 계속 누르자.',
+      bubble: latestEventLabel ? `${latestEventLabel} 버프 왔다. 더 빨리 눌러!` : '좋아, 리듬 탔다! 계속 박자.',
       bossMood: 'watch',
       deskTheme: 'rush',
       stampText: '손맛 상승',

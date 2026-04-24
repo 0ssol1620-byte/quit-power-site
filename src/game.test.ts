@@ -4,6 +4,7 @@ import {
   buildResultMeta,
   buildRivals,
   buildSceneState,
+  createEventSequence,
   getPressureState,
   getTapOutcome,
 } from './game'
@@ -116,5 +117,21 @@ describe('buildSceneState', () => {
       stampText: '워밍업',
       aura: 'soft',
     })
+  })
+})
+
+describe('createEventSequence', () => {
+  it('creates three timed office events with fixed beats', () => {
+    const events = createEventSequence()
+
+    expect(events).toHaveLength(3)
+    expect(events.map((event) => event.at)).toEqual([1600, 4200, 7600])
+    expect(new Set(events.map((event) => event.id)).size).toBe(3)
+  })
+
+  it('only uses supported office event kinds', () => {
+    const events = createEventSequence()
+
+    expect(events.every((event) => ['team-call', 'lunch', 'payday', 'overtime', 'freedom'].includes(event.kind))).toBe(true)
   })
 })
