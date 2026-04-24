@@ -1,4 +1,10 @@
 export type PressureTier = 'calm' | 'rush' | 'fever' | 'clutch'
+export type GamePhase = 'ready' | 'playing' | 'result'
+export type SceneMood = 'ready' | 'rush' | 'rage' | 'result'
+export type SceneFace = 'focused' | 'smile' | 'panic' | 'x-eyes' | 'star'
+export type BossMood = 'idle' | 'watch' | 'shout' | 'stunned'
+export type DeskTheme = 'normal' | 'rush' | 'alarm' | 'confetti'
+export type SceneAura = 'soft' | 'spark' | 'explosion' | 'glow'
 
 export type RivalEntry = {
   rank: number
@@ -10,6 +16,16 @@ export type RivalEntry = {
 export type MissionItem = {
   label: string
   value: string
+}
+
+export type SceneState = {
+  mood: SceneMood
+  face: SceneFace
+  bubble: string
+  bossMood: BossMood
+  deskTheme: DeskTheme
+  stampText: string
+  aura: SceneAura
 }
 
 const RIVALS = ['칼퇴요정', '월급헌터', '퇴근직진', '회의실탈출러', '점심스프린터']
@@ -84,6 +100,78 @@ export function getPressureState({
     label: '워밍업 구간',
     subline: '초반 3초 안에 템포를 올려보세요',
     tier: 'calm' as const,
+  }
+}
+
+export function buildSceneState({
+  phase,
+  pressureTier,
+  feverActive,
+  tapActive,
+  latestEventLabel,
+}: {
+  phase: GamePhase
+  pressureTier: PressureTier
+  feverActive: boolean
+  tapActive: boolean
+  latestEventLabel: string | null
+}): SceneState {
+  if (phase === 'ready') {
+    return {
+      mood: 'ready',
+      face: 'focused',
+      bubble: '상사 오기 전에 버튼 위치부터 외우자.',
+      bossMood: 'idle',
+      deskTheme: 'normal',
+      stampText: '워밍업',
+      aura: 'soft',
+    }
+  }
+
+  if (phase === 'result') {
+    return {
+      mood: 'result',
+      face: 'star',
+      bubble: '이번 판 결과 떴다! 바로 다음 판 갈까?',
+      bossMood: 'stunned',
+      deskTheme: 'confetti',
+      stampText: '결과 확인',
+      aura: 'glow',
+    }
+  }
+
+  if (feverActive || pressureTier === 'clutch') {
+    return {
+      mood: 'rage',
+      face: tapActive ? 'x-eyes' : 'panic',
+      bubble: latestEventLabel ? `${latestEventLabel} 왔다. 지금 눌러서 탈출!` : '지금이야! 버튼만 믿고 탈출!',
+      bossMood: 'shout',
+      deskTheme: 'alarm',
+      stampText: '퇴사각 MAX',
+      aura: 'explosion',
+    }
+  }
+
+  if (pressureTier === 'rush' || tapActive) {
+    return {
+      mood: 'rush',
+      face: 'smile',
+      bubble: latestEventLabel ? `${latestEventLabel} 버프 왔다. 더 빨리 눌러!` : '좋아, 리듬 탔다! 계속 누르자.',
+      bossMood: 'watch',
+      deskTheme: 'rush',
+      stampText: '손맛 상승',
+      aura: 'spark',
+    }
+  }
+
+  return {
+    mood: 'ready',
+    face: 'focused',
+    bubble: latestEventLabel ? `${latestEventLabel} 전까지 페이스 유지.` : '초반엔 리듬부터 만드는 중.',
+    bossMood: 'watch',
+    deskTheme: 'normal',
+    stampText: '집중 모드',
+    aura: 'soft',
   }
 }
 

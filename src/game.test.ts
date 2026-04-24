@@ -3,6 +3,7 @@ import {
   buildMissionSet,
   buildResultMeta,
   buildRivals,
+  buildSceneState,
   getPressureState,
   getTapOutcome,
 } from './game'
@@ -85,5 +86,35 @@ describe('buildMissionSet', () => {
       { label: '리듬 미션', value: '20콤보 유지' },
       { label: '클러치 미션', value: '마지막 3초에 피버 켜기' },
     ])
+  })
+})
+
+describe('buildSceneState', () => {
+  it('uses an energetic press scene when the player is in fever clutch', () => {
+    expect(
+      buildSceneState({ phase: 'playing', pressureTier: 'clutch', feverActive: true, tapActive: true, latestEventLabel: '팀장 호출' }),
+    ).toEqual({
+      mood: 'rage',
+      face: 'x-eyes',
+      bubble: '팀장 호출 왔다. 지금 눌러서 탈출!',
+      bossMood: 'shout',
+      deskTheme: 'alarm',
+      stampText: '퇴사각 MAX',
+      aura: 'explosion',
+    })
+  })
+
+  it('settles into a calmer prep scene before the game starts', () => {
+    expect(
+      buildSceneState({ phase: 'ready', pressureTier: 'calm', feverActive: false, tapActive: false, latestEventLabel: null }),
+    ).toEqual({
+      mood: 'ready',
+      face: 'focused',
+      bubble: '상사 오기 전에 버튼 위치부터 외우자.',
+      bossMood: 'idle',
+      deskTheme: 'normal',
+      stampText: '워밍업',
+      aura: 'soft',
+    })
   })
 })

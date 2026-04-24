@@ -4,9 +4,11 @@ import {
   buildMissionSet,
   buildResultMeta,
   buildRivals,
+  buildSceneState,
   getPressureState,
   getTapOutcome,
   type RivalEntry,
+  type SceneState,
 } from './game'
 
 type Phase = 'ready' | 'playing' | 'result'
@@ -28,15 +30,15 @@ const ROUND_MS = 10_000
 const FEVER_MS = 2_400
 const FEVER_NEED = 100
 const COMBO_WINDOW = 220
-const STORAGE_KEY = 'quit-power-site-v2'
+const STORAGE_KEY = 'quit-power-site-v3'
 
 function createEvents(): GameEvent[] {
   const pool: Omit<GameEvent, 'id' | 'at'>[] = [
-    { kind: 'team-call', label: '팀장 호출', copy: '분노 에너지로 바꿔서 밀어!', boost: 14 },
+    { kind: 'team-call', label: '팀장 호출', copy: '등 뒤에서 발소리 들린다', boost: 14 },
     { kind: 'lunch', label: '점심시간', copy: '손이 빨라지는 버프', boost: 22, bonus: 40 },
-    { kind: 'payday', label: '월급날', copy: '현타가 점수로 변환됨', boost: 16, bonus: 90 },
-    { kind: 'overtime', label: '야근 지옥', copy: '이번엔 꼭 탈출한다', boost: 18 },
-    { kind: 'freedom', label: '칼퇴 찬스', copy: '클러치 직전 폭발 구간', boost: 26, bonus: 60 },
+    { kind: 'payday', label: '월급날', copy: '현타가 점수로 바뀐다', boost: 16, bonus: 90 },
+    { kind: 'overtime', label: '야근 지옥', copy: '오늘은 진짜 탈출한다', boost: 18 },
+    { kind: 'freedom', label: '칼퇴 찬스', copy: '지금이 버튼 누를 황금 타이밍', boost: 26, bonus: 60 },
   ]
 
   return pool
@@ -105,16 +107,25 @@ export default function App() {
     }
   }, [])
 
-  const pressure = useMemo(
-    () => getPressureState({ timeLeft, combo, feverActive: fever }),
-    [combo, fever, timeLeft],
-  )
-
+  const pressure = useMemo(() => getPressureState({ timeLeft, combo, feverActive: fever }), [combo, fever, timeLeft])
   const missions = useMemo(() => buildMissionSet(best || 940), [best])
-
   const leaderboard = useMemo<RivalEntry[]>(() => buildRivals(summary.score || best || 420), [best, summary.score])
-
   const nextRival = leaderboard[1]
+  const elapsed = ROUND_MS - timeLeft
+  const liveTaps = phase === 'playing' ? tapsRef.current : summary.taps
+  const activeEvent = events.findLast((event) => elapsed >= event.at) ?? null
+
+  const sceneState = useMemo(
+    () =>
+      buildSceneState({
+        phase,
+        pressureTier: pressure.tier,
+        feverActive: fever,
+        tapActive,
+        latestEventLabel: activeEvent?.label ?? null,
+      }),
+    [activeEvent?.label, fever, phase, pressure.tier, tapActive],
+  )
 
   const shareText = useMemo(() => {
     if (!summary.score) return ''
@@ -214,14 +225,14 @@ export default function App() {
 
     const tick = (now: number) => {
       const started = startedAtRef.current ?? now
-      const elapsed = now - started
-      const left = Math.max(0, ROUND_MS - elapsed)
+      const elapsedNow = now - started
+      const left = Math.max(0, ROUND_MS - elapsedNow)
 
       timeLeftRef.current = left
       setTimeLeft(left)
 
       eventsRef.current.forEach((event) => {
-        if (processedRef.current.has(event.id) || elapsed < event.at) return
+        if (processedRef.current.has(event.id) || elapsedNow < event.at) return
 
         processedRef.current.add(event.id)
         const eventBonus = event.bonus ?? 0
@@ -296,103 +307,108 @@ export default function App() {
     }
   }
 
-  const elapsed = ROUND_MS - timeLeft
-
   return (
     <div className="page-shell">
-      <header className="title-block">
-        <span className="mini-chip">10초 중독성 미니게임</span>
+      <header className="title-block compact">
+        <span className="mini-chip">캐릭터 액션 클리커</span>
         <h1>퇴사력 키우기</h1>
-        <p>
-          이해는 1초, 플레이는 10초, 재도전은 즉시. 마지막 3초의 퇴사각과 FEVER를 중심으로 한 판 더 누르게 만드는 구조로 재설계했어.
-        </p>
+        <p>웹페이지처럼 보이던 걸 버리고, 사무실 안에서 캐릭터가 진짜 버튼을 내리찍는 씬으로 바꿨다.</p>
       </header>
 
       <section className={`game-shell tier-${pressure.tier} ${fever ? 'is-fever' : ''}`}>
-        <div className="status-row">
-          <StatusCard label="오늘 베스트" value={`${best.toLocaleString()}점`} accent />
-          <StatusCard label="플레이" value={`${dailyRuns}판`} />
-          <StatusCard label="다음 목표" value={`${missions[0]?.value ?? '960점 돌파'}`} />
-        </div>
-
-        <div className={`pressure-banner banner-${pressure.tier}`}>
-          <div>
-            <strong>{pressure.label}</strong>
-            <p>{pressure.subline}</p>
+        <div className="hud-top">
+          <div className="hud-score">
+            <span>퇴사력</span>
+            <strong>{score.toLocaleString()}</strong>
           </div>
-          <span>{phase === 'playing' ? `${(timeLeft / 1000).toFixed(1)}초` : '준비 완료'}</span>
-        </div>
-
-        <div className="meter-panel">
-          <div className="meter-copy">
-            <strong>FEVER 게이지</strong>
-            <span>{fever ? 'ON FIRE' : `${Math.round((meter / FEVER_NEED) * 100)}%`}</span>
-          </div>
-          <div className="meter-track">
-            <div
-              className="meter-fill"
-              style={{ width: `${fever ? 100 : (meter / FEVER_NEED) * 100}%` }}
-            />
+          <div className="hud-mini">
+            <HudMini label="콤보" value={`${combo}`} />
+            <HudMini label="남은 시간" value={phase === 'playing' ? `${(timeLeft / 1000).toFixed(1)}초` : '준비'} />
+            <HudMini label="베스트" value={`${best.toLocaleString()}점`} />
           </div>
         </div>
 
-        <div className="arena-panel">
-          <div className="arena-copy">
-            <span className="headline-tag">{phase === 'playing' ? '실시간 상태' : phase === 'result' ? resultMeta.badge : '플레이 전'}</span>
-            <h2>{phase === 'result' ? resultMeta.title : headline}</h2>
-            <p>
-              {phase === 'playing'
-                ? '버튼을 연타해 콤보를 끊기지 않게 유지해. 마지막 3초엔 점수가 더 크게 뛴다.'
-                : phase === 'result'
-                  ? resultMeta.comment
-                  : '초반엔 리듬, 중반엔 FEVER, 마지막엔 퇴사각. 이 3단계를 타게 만들면 재도전률이 올라간다.'}
-            </p>
+        <div className="scene-card">
+          <div className={`pressure-banner banner-${pressure.tier}`}>
+            <div>
+              <strong>{pressure.label}</strong>
+              <p>{pressure.subline}</p>
+            </div>
+            <span>{sceneState.stampText}</span>
           </div>
 
-          <div className="score-strip">
-            <ScorePill label="퇴사력" value={score.toLocaleString()} />
-            <ScorePill label="콤보" value={`${combo}`} />
-            <ScorePill label="탭 수" value={`${phase === 'playing' ? tapsRef.current : summary.taps}`} />
+          <div className="meter-panel slim">
+            <div className="meter-copy">
+              <strong>FEVER</strong>
+              <span>{fever ? 'ON FIRE' : `${Math.round((meter / FEVER_NEED) * 100)}%`}</span>
+            </div>
+            <div className="meter-track">
+              <div className="meter-fill" style={{ width: `${fever ? 100 : (meter / FEVER_NEED) * 100}%` }} />
+            </div>
           </div>
 
-          <div className="arena">
-            <div className="ring ring-1" />
-            <div className="ring ring-2" />
-            <div className="ring ring-3" />
+          <div className={`arena scene-${sceneState.mood} aura-${sceneState.aura}`}>
+            <div className={`office-backdrop desk-${sceneState.deskTheme}`}>
+              <div className="window-row">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className={`boss-shadow boss-${sceneState.bossMood}`}>
+                <div className="boss-head" />
+                <div className="boss-body" />
+              </div>
+              <div className="office-clock">18:01</div>
+              <div className={`stamp-badge ${pressure.tier}`}>{sceneState.stampText}</div>
+            </div>
 
-            {bursts.map((burst) => (
-              <span
-                key={burst.id}
-                className={`burst ${burst.hot ? 'hot' : ''}`}
-                style={{ left: `${burst.x}%`, top: `${burst.y}%` }}
-              >
-                {burst.text}
-              </span>
-            ))}
+            <div className="desk-layer">
+              <div className="monitor">
+                <div className="monitor-screen">
+                  <span className="headline-tag">실시간 상황</span>
+                  <strong>{phase === 'result' ? resultMeta.title : headline}</strong>
+                  <p>{sceneState.bubble}</p>
+                </div>
+              </div>
 
-            <button
-              className={`tap-core ${tapActive ? 'tap-active' : ''}`}
-              disabled={phase !== 'playing'}
-              onClick={handleTap}
-            >
-              <span>퇴사!</span>
-              <small>{phase === 'playing' ? '연타해서 탈출' : '준비 버튼'}</small>
-            </button>
+              <div className={`tap-zone ${tapActive ? 'pressed' : ''}`}>
+                {bursts.map((burst) => (
+                  <span
+                    key={burst.id}
+                    className={`burst ${burst.hot ? 'hot' : ''}`}
+                    style={{ left: `${burst.x}%`, top: `${burst.y}%` }}
+                  >
+                    {burst.text}
+                  </span>
+                ))}
+
+                <Character sceneState={sceneState} tapActive={tapActive} phase={phase} />
+
+                <button
+                  className={`tap-core ${tapActive ? 'tap-active' : ''}`}
+                  disabled={phase !== 'playing'}
+                  onClick={handleTap}
+                >
+                  <span>퇴사!</span>
+                  <small>{phase === 'playing' ? '캐릭터가 내리찍는 중' : '시작 대기'}</small>
+                </button>
+              </div>
+            </div>
 
             {phase !== 'playing' && (
-              <div className="overlay-card">
+              <div className="overlay-card scene-overlay">
                 {phase === 'ready' ? (
                   <>
-                    <strong>손맛 설계 완료</strong>
-                    <h3>초반 리듬 + FEVER + 마지막 3초 클러치</h3>
-                    <p>버튼 하나만 누르지만, 체감은 계속 올라가게 만들었다. 바로 시작해서 손맛부터 보자.</p>
-                    <button className="primary-button" onClick={startGame}>지금 바로 시작</button>
+                    <strong>사무실 탈출 준비 완료</strong>
+                    <h3>캐릭터가 직접 버튼을 박살낸다</h3>
+                    <p>탭하면 팔이 내려가고, 상사는 당황하고, 배경도 함께 흔들리게 만들었어.</p>
+                    <button className="primary-button" onClick={startGame}>출근 종료 버튼 누르기</button>
                   </>
                 ) : (
                   <>
                     <strong>{resultMeta.badge}</strong>
                     <h3>{summary.score.toLocaleString()}점</h3>
-                    <p>최대 {summary.maxCombo}콤보 · 상위 {100 - resultMeta.percentile}% · 다음 목표 {resultMeta.nextTarget}점</p>
+                    <p>최대 {summary.maxCombo}콤보 · {summary.taps}회 연타 · 다음 목표 {resultMeta.nextTarget}점</p>
                     <div className="overlay-actions">
                       <button className="primary-button" onClick={startGame}>한 판 더</button>
                       <button className="ghost-button" onClick={copyShare}>{shareCopied ? '복사 완료' : '결과 복사'}</button>
@@ -403,31 +419,39 @@ export default function App() {
             )}
           </div>
 
-          <div className="event-rail">
-            {events.map((event) => {
-              const active = elapsed >= event.at
-              return (
-                <div key={event.id} className={`event-pill ${active ? 'active' : ''}`}>
-                  <span>{event.label}</span>
-                  <strong>{active ? '발동' : `${(event.at / 1000).toFixed(1)}초`}</strong>
-                </div>
-              )
-            })}
-          </div>
+          <div className="hud-bottom">
+            <div className="score-strip compact-strip">
+              <ScorePill label="탭 수" value={`${liveTaps}`} />
+              <ScorePill label="오늘 플레이" value={`${dailyRuns}판`} />
+              <ScorePill label="다음 목표" value={missions[0]?.value ?? '960점 돌파'} />
+            </div>
 
-          <div className="action-row">
-            {phase === 'playing' ? (
-              <button className="ghost-button wide" onClick={finishGame}>지금 점수 확정</button>
-            ) : (
-              <button className="ghost-button wide" onClick={copyShare} disabled={!shareText}>
-                {shareCopied ? '복사 완료' : '공유 문구 복사'}
-              </button>
-            )}
+            <div className="event-rail compact-events">
+              {events.map((event) => {
+                const active = elapsed >= event.at
+                return (
+                  <div key={event.id} className={`event-pill ${active ? 'active' : ''}`}>
+                    <span>{event.label}</span>
+                    <strong>{active ? '발동' : `${(event.at / 1000).toFixed(1)}초`}</strong>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="action-row">
+              {phase === 'playing' ? (
+                <button className="ghost-button wide" onClick={finishGame}>지금 점수 확정</button>
+              ) : (
+                <button className="ghost-button wide" onClick={copyShare} disabled={!shareText}>
+                  {shareCopied ? '복사 완료' : '공유 문구 복사'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="hook-grid">
+      <section className="hook-grid compact-hooks">
         <article className="hook-card mission-card">
           <div className="card-head">
             <span>재도전 유도</span>
@@ -446,7 +470,7 @@ export default function App() {
         <article className="hook-card rival-card">
           <div className="card-head">
             <span>근접 랭킹</span>
-            <strong>바로 위만 보이게</strong>
+            <strong>바로 위 한 명만 추격</strong>
           </div>
           <div className="rival-list">
             {leaderboard.map((entry) => (
@@ -470,9 +494,9 @@ export default function App() {
   )
 }
 
-function StatusCard({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function HudMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`status-card ${accent ? 'accent' : ''}`}>
+    <div className="hud-mini-card">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
@@ -486,4 +510,32 @@ function ScorePill({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   )
+}
+
+function Character({ sceneState, tapActive, phase }: { sceneState: SceneState; tapActive: boolean; phase: Phase }) {
+  return (
+      <div className={`character-wrap mood-${sceneState.mood} face-${sceneState.face} ${tapActive ? 'is-tapping' : ''}`}>
+      <div className="speech-bubble">{sceneState.bubble}</div>
+      <div className="character">
+        <div className="character-head">
+          <span className="hair" />
+          <span className="eye left" />
+          <span className="eye right" />
+          <span className="mouth" />
+          <span className="blush blush-left" />
+          <span className="blush blush-right" />
+        </div>
+        <div className="character-body">
+          <span className="arm back" />
+          <span className="arm front" />
+          <span className="leg left" />
+          <span className="leg right" />
+        </div>
+        <div className="impact-line impact-1" />
+        <div className="impact-line impact-2" />
+        <div className="desk-shadow" />
+      </div>
+      <div className={`tap-hint ${phase === 'playing' ? 'live' : ''}`}>{phase === 'playing' ? '연타!!' : 'READY'}</div>
+    </div>
+)
 }
