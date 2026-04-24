@@ -1,47 +1,64 @@
-name: Deploy Comet Rush Pages
+name: Build Original Comet Rush Pages
 
 on:
   push:
     branches: [main]
     paths:
-      - comet-rush/**
+      - comet-rush-app/source.tgz.b64
       - .github/workflows/comet-rush-pages.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: comet-rush-pages
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare static site
-        run: |
-          mkdir -p _site/comet-rush
-          cp comet-rush/index.html _site/index.html
-          cp comet-rush/index.html _site/404.html
-          cp -R comet-rush _site/comet-rush
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          path: _site
+          node-version: 24
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Decode original source
+        run: |
+          mkdir -p comet-rush-app/work
+          base64 -d comet-rush-app/source.tgz.b64 | tar -xz -C comet-rush-app/work
+
+      - name: Install dependencies
+        working-directory: comet-rush-app/work
+        run: npm install --no-audit --no-fund
+
+      - name: Build original game
+        working-directory: comet-rush-app/work
+        run: npm run build
+
+      - name: Prepare Pages payload
+        run: |
+          rm -rf /tmp/comet-pages
+          mkdir -p /tmp/comet-pages/comet-rush
+          cp -R comet-rush-app/work/dist/. /tmp/comet-pages/
+          cp -R comet-rush-app/work/dist/. /tmp/comet-pages/comet-rush/
+          cp comet-rush-app/work/dist/index.html /tmp/comet-pages/404.html
+          touch /tmp/comet-pages/.nojekyll
+
+      - name: Publish gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd /tmp/comet-pages
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy original Comet Rush"
+          git branch -M gh-pages
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin gh-pages
