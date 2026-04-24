@@ -21,7 +21,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}comet-rush/
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,7 +29,9 @@ jobs:
 
       - name: Prepare static site
         run: |
-          mkdir -p _site
+          mkdir -p _site/comet-rush
+          cp comet-rush/index.html _site/index.html
+          cp comet-rush/index.html _site/404.html
           cp -R comet-rush _site/comet-rush
 
       - name: Configure Pages
