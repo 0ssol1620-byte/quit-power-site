@@ -1,0 +1,21 @@
+body {
+  margin: 0;
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top, rgba(87, 216, 255, 0.14), transparent 35%),
+    linear-gradient(180deg, #071317 0%, #081c1c 42%, #051012 100%);
+  color: #f7efe6;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}
